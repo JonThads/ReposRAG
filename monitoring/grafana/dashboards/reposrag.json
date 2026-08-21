@@ -1,0 +1,80 @@
+{
+  "title": "ReposRAG Overview",
+  "uid": "reposrag-overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Pipeline Latency (p50/p95) by Stage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(reposrag_embedding_seconds_bucket[5m])) by (le))",
+          "legendFormat": "embedding p95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(reposrag_retrieval_seconds_bucket[5m])) by (le))",
+          "legendFormat": "retrieval p95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(reposrag_generation_seconds_bucket[5m])) by (le))",
+          "legendFormat": "generation p95"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Top-1 Retrieval Similarity (distribution)",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(reposrag_top1_similarity_bucket[5m])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Query Throughput",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(reposrag_queries_total[1m]))",
+          "legendFormat": "queries/sec"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Errors by Stage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(reposrag_query_errors_total[5m])) by (stage)",
+          "legendFormat": "{{stage}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Ollama Timeouts",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(increase(reposrag_ollama_timeouts_total[15m]))",
+          "legendFormat": "timeouts (15m)"
+        }
+      ]
+    }
+  ]
+}
