@@ -2,17 +2,27 @@
   {
     "repo": "clockwise",
     "question": "What does the ClockWise project do?",
-    "expected_answer": "ClockWise is a web-based application designed to streamline Daily Time Record (DTR) Tracking and Leave Management for stakeholders. It provides HR Teams and Managers with an efficient way to monitor attendance, manage shift schedules, and process leave requests — all in one centralized platform."
+    "expected_answer": "ClockWise is a web-based application designed to streamline attendace and Leave Management for stakeholders, primarily for HR and employees. It provides HR Teams and Line Managers with a way to monitor attendance, manage shift schedules, and process leave requests for their subordinates."
   },
   {
     "repo": "clockwise",
     "question": "What features are in ClockWise?",
-    "expected_answer": "Employee Management\n- Add, update, and manage employee records\n- Assign departments, work groups, and shift schedules\n\nShift Scheduling\n- Define multiple shift types (Morning, Afternoon, Night, Flexible)\n- Dynamic shift codes (M, A, N, F) with start and end times\n- Auto-generated legends for easy reference\n\nDaily Time Record (DTR)\n- Track employee clock-in and clock-out times\n- Generate attendance reports\n- (Under Development) Handle overtime and undertime calculations\n\nLeave Management\n- Support for multiple leave types (Vacation, Sick, Emergency, Birthday, Study, No Pay)\n- Leave request submission and approval workflow\n- Leave balance tracking per employee\n\nUser Dashboard\n- Personalized view of schedules, attendance, and leave status\n- HR/Admin dashboard for monitoring organization-wide data"
+    "expected_answer": "Employee Management\n- Add, update, and manage employee records\n- Assign departments, work groups, and shift schedules\n\nShift Scheduling\n- Define multiple shift types and schedules\n- Dynamic shift codes (M, A, N, F) with start and end times\n- Auto-generated legends for easy reference\n\nDaily Time Record (DTR)\n- Track employee clock-in and clock-out times\n- Generate attendance reports\n- (Under Development) Handle overtime and undertime calculations\n\nLeave Management\n- Support for multiple leave types (Vacation, Sick, Emergency, Birthday, Study, No Pay)\n- Leave request submission and approval workflow\n- Leave balance tracking per employee\n\nUser Dashboard\n- Personalized view of schedules, attendance, and leave status\n- HR/Admin dashboard for monitoring organization-wide data"
   },
   {
     "repo": "pickle-rick",
     "question": "What problem does Pickle-Rick solve?",
     "expected_answer": "Pickle Rick is a two-sided web app that combines a Pickleball Court Management System for Admins with a Reservation System for Players in one platform. Admins manage courts, inventory, and bookings; Players find courts in their location, reserve time slots, and split games with other Players through 'Pasalo' join requests — all in one place."
+  },
+  {
+    "repo": "pickle-rick",
+    "question": "What features are in Pickle-Rick?",
+    "expected_answer": "Authentication & Registration, Court Management for Admins, Player Bookings, Pasalo or letting other players join other players Bookings, Court Inventory Management, and Account Deletion for both Admin and Players."
+  },
+  {
+    "repo": "pickle-rick",
+    "question": "What is the tech stack for Pickle-Rick?",
+    "expected_answer": "For the Backend: Node.js, it uses PostgreSQL for its database, Infra: Docker, Monitoring: Prometheus + Grafana, CI/CD: GitHub Actions, API Testing: Postman + Newman, UI Testing: Playwright + TypeScript, and k6 for Load and Performance Testing."
   },
   {
     "repo": "tokenomics-mcp",
