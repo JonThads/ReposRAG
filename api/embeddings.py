@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 from typing import List
 
@@ -6,10 +7,31 @@ from sentence_transformers import SentenceTransformer
 
 from .config import settings
 
+# Added Ollama GPU Support as per Jira Ticket RAG-24
+logger = logging.getLogger("reposrag.embeddings")
+
+def resolve_device(requested: str) -> str:
+    """Resolve 'auto' to the best available device; pass explicit choices through unchanged."""
+    if requested != "auto":
+        return requested
+
+    try:
+        import torch
+    except ImportError:
+        return "cpu"
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
 @lru_cache(maxsize=1)
 def get_embedder() -> SentenceTransformer:
     """Load the embedding model once and cache it for the process lifetime."""
-    return SentenceTransformer(settings.embedding_model)
+    device = resolve_device(settings.embedding_device)
+    logger.info("embeddings.model_load", extra={"model": settings.embedding_model, "device": device})
+    return SentenceTransformer(settings.embedding_model, device=device)
 
 def embed_text(text: str) -> np.ndarray:
     """Embed a single string. Returns a 1D float32 numpy array."""

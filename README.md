@@ -34,6 +34,7 @@ Ollama model, embeddings run on a local sentence-transformers model.
   ```bash
   ollama pull qwen2.5:3b
   ```
+
   Ollama must be running (`ollama serve`, or it auto-starts on most installs) and
   reachable at `http://localhost:11434` on the host.
 
@@ -45,14 +46,16 @@ docker-compose up --build
 ```
 
 This starts:
-| Service | URL |
-|---|---|
-| API | http://localhost:8000 |
-| API docs (Swagger) | http://localhost:8000/docs |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 (admin/admin, or anonymous viewer) |
+
+| Service            | URL                                                      |
+| ------------------ | -------------------------------------------------------- |
+| API                | http://localhost:8000                                    |
+| API docs (Swagger) | http://localhost:8000/docs                               |
+| Prometheus         | http://localhost:9090                                    |
+| Grafana            | http://localhost:3000 (admin/admin, or anonymous viewer) |
 
 Check health:
+
 ```bash
 curl http://localhost:8000/health
 ```
@@ -91,6 +94,7 @@ scores), and a timing breakdown per pipeline stage.
    ```bash
    python -m eval.run_eval --api-url http://localhost:8000
    ```
+
    This scores faithfulness and answer relevancy via DeepEval, using the local
    Ollama model as the judge (no paid judge API needed), and writes
    `eval/eval_report.csv`.
@@ -99,6 +103,7 @@ scores), and a timing breakdown per pipeline stage.
 
 Prometheus scrapes `/metrics` on the API every 5s. Grafana auto-provisions a
 "ReposRAG Overview" dashboard with:
+
 - Embedding / retrieval / generation latency (p95), broken out by stage
 - Top-1 retrieval similarity distribution (low scores flag corpus gaps)
 - Query throughput and error rate by pipeline stage
@@ -122,6 +127,13 @@ similarity.
   larger corpora.
 - The evaluation test set is small (hand-written) and repo-specific — good
   for iteration signal, not a statistically rigorous benchmark.
+
+## GPU Acceleration (optional)
+
+- **Embeddings**: set `EMBEDDING_DEVICE=cuda` (NVIDIA) or `EMBEDDING_DEVICE=mps` (Apple Silicon) in `.env`,
+  or leave it on `auto` (default) to detect automatically. Falls back to CPU if no GPU is found.
+- **Ollama**: uses the host GPU automatically if one is available and drivers are installed —
+  no ReposRAG-side configuration needed. See https://ollama.com for host GPU setup.
 
 ## Optional stretch stages (not included here)
 

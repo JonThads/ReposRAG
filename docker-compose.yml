@@ -4,16 +4,16 @@ services:
     container_name: reposrag-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: reposrag
-      POSTGRES_PASSWORD: reposrag
-      POSTGRES_DB: reposrag
+      POSTGRES_USER: ${POSTGRES_USER:-reposrag} # Removed hard-coded credentials as per Jira Ticket RAG-26
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-reposrag}
     volumes:
       - reposrag_pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reposrag"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reposrag}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://reposrag:reposrag@db:5432/reposrag
+      DATABASE_URL: postgresql://${POSTGRES_USER:-reposrag}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-reposrag}
     depends_on:
       db:
         condition: service_healthy

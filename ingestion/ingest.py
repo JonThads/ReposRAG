@@ -9,6 +9,7 @@ Re-running for the same --repo-name replaces its existing chunks (idempotent).
 """
 
 import argparse
+import logging
 import shutil
 import sys
 import tempfile
@@ -20,8 +21,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from api.chunker import chunk_markdown  # noqa: E402
 from api.db import get_conn  # noqa: E402
 from api.embeddings import embed_batch  # noqa: E402
+from api.logging_config import configure_logging  # noqa: E402
 
 TARGET_GLOBS = ["README.md", "readme.md", "docs/**/*.md", "CONTRIBUTING.md"]
+
+logger = logging.getLogger("reposrag.ingest")
 
 
 def find_doc_files(root: Path) -> List[Path]:
@@ -35,7 +39,7 @@ def clone_repo(url: str) -> Path:
     import git  # GitPython
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="reposrag_clone_"))
-    print(f"Cloning {url} into {tmp_dir} ...")
+    logger.info("ingest.clone_start", extra={"url": url, "tmp_dir": str(tmp_dir)})
     git.Repo.clone_from(url, tmp_dir, depth=1)
     return tmp_dir
 
@@ -44,7 +48,7 @@ def delete_existing_chunks(repo_name: str):
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM chunks WHERE repo = %s;", (repo_name,))
-    print(f"Cleared existing chunks for repo '{repo_name}'.")
+    logger.info("ingest.cleared_existing_chunks", extra={"repo": repo_name})
 
 
 def insert_chunks(repo_name: str, file_path: str, chunks, embeddings):
@@ -77,7 +81,7 @@ def insert_chunks(repo_name: str, file_path: str, chunks, embeddings):
 def ingest_repo(root: Path, repo_name: str):
     doc_files = find_doc_files(root)
     if not doc_files:
-        print(f"No documentation files found under {root} matching {TARGET_GLOBS}")
+        logger.warning("ingest.no_doc_files", extra={"root": str(root), "globs": TARGET_GLOBS})
         return
 
     delete_existing_chunks(repo_name)
@@ -90,15 +94,16 @@ def ingest_repo(root: Path, repo_name: str):
         if not chunks:
             continue
 
-        print(f"  {rel_path}: {len(chunks)} chunk(s)")
+        logger.info("ingest.file_chunked", extra={"file": rel_path, "chunk_count": len(chunks)})
         embeddings = embed_batch([c.content for c in chunks])
         insert_chunks(repo_name, rel_path, chunks, embeddings)
         total_chunks += len(chunks)
 
-    print(f"Done. Ingested {total_chunks} chunks for repo '{repo_name}'.")
+    logger.info("ingest.complete", extra={"repo": repo_name, "total_chunks": total_chunks})
 
 
 def main():
+    configure_logging()
     parser = argparse.ArgumentParser(description="Ingest repo docs into ReposRAG.")
     parser.add_argument("--source", choices=["local", "git"], required=True)
     parser.add_argument("--path", help="Local path to the repo (required if --source local)")
