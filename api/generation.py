@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 import httpx
+import json
 
 from .config import settings
 
@@ -49,6 +50,33 @@ def generate_answer(question: str, context_chunks: List[dict], timeout: float = 
 
     data = response.json()
     return data.get("response", "").strip(), elapsed
+
+# Added for /query/stream api as per Jira Ticket RAG-16
+def stream_answer(question: str, context_chunks: List[dict], timeout: float = 60.0):
+    """
+    Call Ollama with stream=True and yield answer tokens as they arrive.
+    Caller is responsible for framing each token.
+    """
+    prompt = build_prompt(question, context_chunks)
+
+    payload = {
+        "model": settings.ollama_model,
+        "prompt": prompt,
+        "stream": True,
+    }
+
+    with httpx.Client(timeout=timeout) as client:
+        with client.stream("POST", f"{settings.ollama_host}/api/generate", json=payload) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                data = json.loads(line)
+                token = data.get("response", "")
+                if token:
+                    yield token
+                if data.get("done"):
+                    break
 
 def check_ollama_health(timeout: float = 5.0) -> bool:
     try:
