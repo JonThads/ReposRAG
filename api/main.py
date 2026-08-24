@@ -6,10 +6,13 @@ from datetime import datetime
 from typing import List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from . import metrics
 from .config import settings
@@ -25,6 +28,24 @@ app = FastAPI(title="ReposRAG", version="1.0.0")
 
 # Expose /metrics for Prometheus to scrape.
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+
+# Added for auth/rate limiting as per Jira Ticket RAG-17
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
+    """
+    Auth is off by default (`settings.api_key` unset) for local/dev use.
+    Once `API_KEY` is configured, every guarded route requires a matching
+    `X-API-Key` header.
+    """
+    if not settings.api_key:
+        return
+    if x_api_key != settings.api_key:
+        logger.warning("auth.rejected")
+        raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key header.")
 
 
 @app.middleware("http")
@@ -84,10 +105,38 @@ def health():
     return {"status": status, "db": db_ok, "ollama": ollama_ok}
 
 
+# Added for repo-filter validation as per Jira Ticket RAG-9
+def _validate_repo(repo: str) -> None:
+    """
+    Raise 404 if `repo` has no ingested chunks, distinguishing an unknown/
+    misspelled repo from a genuinely empty index. Costs one indexed lookup
+    on `chunks_repo_idx`; a second query (listing known repos) only runs on
+    the error path.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM chunks WHERE repo = %s LIMIT 1;", (repo,))
+            if cur.fetchone() is not None:
+                return
+            cur.execute("SELECT DISTINCT repo FROM chunks ORDER BY repo;")
+            known_repos = [r[0] for r in cur.fetchall()]
+
+    metrics.QUERY_UNKNOWN_REPO.inc()
+    logger.warning("query.unknown_repo", extra={"repo": repo, "known_repos": known_repos})
+    if known_repos:
+        detail = f"Unknown repo '{repo}'. Known repos: {known_repos}"
+    else:
+        detail = "No indexed content found. Run ingestion first."
+    raise HTTPException(status_code=404, detail=detail)
+
+
 # Refactored out of /query as per Jira Ticket RAG-16, so /query and /query/stream share one retrieval path
 def _retrieve(req: QueryRequest, top_k: int):
     """Embed the question and retrieve the top-k similar chunks. Shared by /query and /query/stream."""
     logger.info("query.start", extra={"repo": req.repo, "top_k": top_k})
+
+    if req.repo:
+        _validate_repo(req.repo)
 
     # --- 1. Embed the question ---
     embed_start = time.perf_counter()
@@ -151,8 +200,9 @@ def _retrieve(req: QueryRequest, top_k: int):
     return context_chunks, sources, embed_seconds, retrieval_seconds, float(rows[0][4])
 
 
-@app.post("/query", response_model=QueryResponse)
-def query(req: QueryRequest):
+@app.post("/query", response_model=QueryResponse, dependencies=[Depends(require_api_key)])
+@limiter.limit(lambda: f"{settings.rate_limit_per_minute}/minute")
+def query(request: Request, req: QueryRequest):
     metrics.QUERY_COUNT.inc()
     top_k = req.top_k or settings.top_k
 
@@ -194,8 +244,9 @@ def query(req: QueryRequest):
     )
 
 # Added for /query/stream api as per Jira Ticket RAG-16
-@app.post("/query/stream")
-def query_stream(req: QueryRequest):
+@app.post("/query/stream", dependencies=[Depends(require_api_key)])
+@limiter.limit(lambda: f"{settings.rate_limit_per_minute}/minute")
+def query_stream(request: Request, req: QueryRequest):
     """
     Same as /query, but streams the answer over Server-Sent Events as it's
     generated. Emits `token` events during generation, then a single `done`
@@ -252,7 +303,7 @@ def query_stream(req: QueryRequest):
 
 
 # Added for /repos api as per Jira Ticket RAG-14
-@app.get("/repos", response_model=RepoListResponse)
+@app.get("/repos", response_model=RepoListResponse, dependencies=[Depends(require_api_key)])
 def list_repos():
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -271,7 +322,7 @@ def list_repos():
     )
 
 # Added for /repos/{repo_name} api as per Jira Ticket RAG-15
-@app.delete("/repos/{repo_name}", response_model=DeleteRepoResponse)
+@app.delete("/repos/{repo_name}", response_model=DeleteRepoResponse, dependencies=[Depends(require_api_key)])
 def delete_repo(repo_name: str):
     with get_conn() as conn:
         with conn.cursor() as cur:
