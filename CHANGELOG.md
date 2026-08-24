@@ -2,6 +2,19 @@
 
 All notable changes to ReposRAG are documented here, newest first.
 
+## 2026-08-24
+
+### Added
+- `GET /repos` endpoint listing every ingested repo with its chunk count and last-ingested timestamp. ([RAG-14](https://pickle-rick.atlassian.net/browse/RAG-14))
+- `DELETE /repos/{repo_name}` endpoint to remove a repo's chunks without re-ingesting an empty replacement. ([RAG-15](https://pickle-rick.atlassian.net/browse/RAG-15))
+- `POST /query/stream` — a Server-Sent Events streaming mode for `/query`, emitting `token` events as the answer is generated and a final `done` event carrying sources and timings, backed by a new `stream_answer()` in [api/generation.py](api/generation.py). ([RAG-16](https://pickle-rick.atlassian.net/browse/RAG-16))
+
+### Changed
+- Extracted `/query`'s embed-and-retrieve logic into a shared `_retrieve()` helper in [api/main.py](api/main.py) so `/query` and `/query/stream` don't duplicate it; non-streaming `/query` behavior is unchanged. ([RAG-16](https://pickle-rick.atlassian.net/browse/RAG-16))
+
+### Fixed
+- N/A
+
 ## 2026-08-23
 
 ### Added
