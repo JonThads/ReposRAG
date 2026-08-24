@@ -1,9 +1,19 @@
+import json
+import logging
+import time
 from typing import List, Tuple
 
 import httpx
-import json
 
+from . import metrics
 from .config import settings
+
+logger = logging.getLogger("reposrag.generation")
+
+# Added for retry/backoff as per Jira Ticket RAG-8. These are the failure
+# modes a retry can plausibly fix — a genuine 4xx/5xx from Ollama itself is
+# not retried.
+_RETRYABLE_EXCEPTIONS = (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError)
 
 SYSTEM_PROMPT = (
     "You are a documentation assistant. Answer the user's question using ONLY "
@@ -31,6 +41,10 @@ def generate_answer(question: str, context_chunks: List[dict], timeout: float = 
     """
     Call the local Ollama server to generate an answer grounded in context_chunks.
     Returns (answer_text, generation_seconds).
+
+    Retries up to `settings.ollama_max_retries` times, with exponential
+    backoff, on transient connection errors and timeouts (RAG-8). A genuine
+    HTTP error status from Ollama itself is not retried.
     """
     prompt = build_prompt(question, context_chunks)
 
@@ -40,16 +54,27 @@ def generate_answer(question: str, context_chunks: List[dict], timeout: float = 
         "stream": False,
     }
 
-    with httpx.Client(timeout=timeout) as client:
-        import time
-
-        start = time.perf_counter()
-        response = client.post(f"{settings.ollama_host}/api/generate", json=payload)
-        response.raise_for_status()
-        elapsed = time.perf_counter() - start
-
-    data = response.json()
-    return data.get("response", "").strip(), elapsed
+    attempt = 0
+    while True:
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                start = time.perf_counter()
+                response = client.post(f"{settings.ollama_host}/api/generate", json=payload)
+                response.raise_for_status()
+                elapsed = time.perf_counter() - start
+            data = response.json()
+            return data.get("response", "").strip(), elapsed
+        except _RETRYABLE_EXCEPTIONS as e:
+            if attempt >= settings.ollama_max_retries:
+                raise
+            attempt += 1
+            metrics.OLLAMA_RETRIES.inc()
+            backoff = settings.ollama_retry_backoff_seconds * (2 ** (attempt - 1))
+            logger.warning(
+                "ollama.retry",
+                extra={"attempt": attempt, "max_retries": settings.ollama_max_retries, "error": str(e), "backoff_seconds": backoff},
+            )
+            time.sleep(backoff)
 
 # Added for /query/stream api as per Jira Ticket RAG-16
 def stream_answer(question: str, context_chunks: List[dict], timeout: float = 60.0):

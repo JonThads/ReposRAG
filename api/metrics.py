@@ -39,3 +39,15 @@ OLLAMA_TIMEOUTS = Counter(
     "reposrag_ollama_timeouts_total",
     "Total number of Ollama generation calls that timed out or failed",
 )
+
+# Added for retry/backoff as per Jira Ticket RAG-8
+OLLAMA_RETRIES = Counter(
+    "reposrag_ollama_retries_total",
+    "Total number of Ollama generation calls retried after a transient failure",
+)
+
+# Added for repo-filter validation as per Jira Ticket RAG-9
+QUERY_UNKNOWN_REPO = Counter(
+    "reposrag_query_unknown_repo_total",
+    "Total number of /query requests filtered on a repo with no ingested chunks",
+)
