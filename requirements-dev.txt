@@ -1,0 +1,5 @@
+# Dev/test-only dependencies. Added for a pytest unit suite as per Jira Ticket RAG-10.
+-r requirements.txt
+
+pytest==8.3.3
+pytest-cov==5.0.0
