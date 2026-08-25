@@ -14,6 +14,7 @@ All notable changes to ReposRAG are documented here, newest first.
 
 ### Changed
 - README's "Known limitations" section: reworded the CPU-embedding bullet now that GPU acceleration is opt-in (RAG-24), and added bullets calling out that chunking is still fixed-size/paragraph-greedy and retrieval is still vector-only — both explicitly out of scope until the Retrieval Quality epic (RAG-21/RAG-22/RAG-23) ships. ([RAG-28](https://pickle-rick.atlassian.net/browse/RAG-28))
+- `docs/claude-instructions.md`'s Flow section no longer claims the Main pipeline runs k6 — ReposRAG has no k6/load-testing step in any of the three pipelines, and never has.
 
 ### Fixed
 - Removed an unused `deepeval.evaluate` import in [eval/run_eval.py](eval/run_eval.py) — the one real issue the new lint gate found. ([RAG-11](https://pickle-rick.atlassian.net/browse/RAG-11))
