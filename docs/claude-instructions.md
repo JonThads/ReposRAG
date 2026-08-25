@@ -2,6 +2,14 @@
 
 *ReposRAG*
 
+### Output
+
+When giving output, AI should give the format of:
+
+1. Summary - gives an overall summary of all changes and things done
+2. List of items - a list/bullet of all changes and things done
+3. Detailed List - actual breakdown of each item from the Summary and List of Items
+
 ### Flow
 
 Development always happens on one of the prefixed branches above, never
@@ -49,6 +57,7 @@ code merge. All three are implemented (`.github/workflows/`).
 - DeepEval
 - Docker
 - Git and GitHub
+- Prometheus and Grafana
 
 ## Professional / Production-Grade Conventions
 
