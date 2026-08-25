@@ -61,6 +61,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Install and start Ollama
+        env:
+          # ollama serve binds to 127.0.0.1 only by default, which is
+          # unreachable from the api container via host.docker.internal
+          # (the Docker bridge gateway, not loopback). 0.0.0.0 makes it
+          # reachable from both the runner and the container.
+          OLLAMA_HOST: 0.0.0.0
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
           ollama serve &
