@@ -1,0 +1,15 @@
+# Lint rule selection for the Development pipeline (RAG-11).
+#
+# Scoped to pyflakes (F) — undefined names, unused imports, real
+# correctness issues — rather than the full default rule set. This is the
+# first time lint has gated merges on this codebase, and it wasn't written
+# to a strict line-length (E501) or pyupgrade (UP) style, so turning those
+# on today would fail on pre-existing, unrelated code rather than catching
+# real bugs. Widen `select` incrementally in a follow-up `chore/` branch
+# once the codebase is brought up to whatever stricter style is wanted.
+# [Comment] as per Jira Work Item RAG-11
+
+target-version = "py311"
+
+[lint]
+select = ["F"]
