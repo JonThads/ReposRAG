@@ -9,9 +9,11 @@ All notable changes to ReposRAG are documented here, newest first.
 - QA pipeline (`.github/workflows/qa.yml`) — the `pytest` suite, then a live end-to-end smoke test (self-ingest this repo's own docs as a fixture, then a real `/query` call) against the docker-compose stack, gating merges into `qa`. ([RAG-12](https://pickle-rick.atlassian.net/browse/RAG-12))
 - Main pipeline (`.github/workflows/main.yml`) — the QA pipeline, a Docker image build check, and a secrets scan (`gitleaks`), gating merges into `main`; an optional manual `workflow_dispatch` additionally tags and publishes a release image to GHCR. ([RAG-13](https://pickle-rick.atlassian.net/browse/RAG-13))
 - `ruff.toml` scoping the Development pipeline's lint check to pyflakes (`F`) rules — this is the first time lint has gated merges on this codebase, and it wasn't written to a strict line-length or pyupgrade style, so starting with real-correctness rules avoids failing on unrelated pre-existing code. ([RAG-11](https://pickle-rick.atlassian.net/browse/RAG-11))
+- README documentation for `GET /repos`, `DELETE /repos/{repo_name}`, `/query/stream`, and the `X-API-Key`/rate-limit behavior — these shipped in RAG-14 through RAG-17 without corresponding README coverage until now. ([RAG-27](https://pickle-rick.atlassian.net/browse/RAG-27))
+- `docs/runbook.md` — GPU device selection, the structured JSON log format and correlation-ID tracing, and a description of each CI/CD pipeline (what it checks, how to re-run it, how to publish a release image). Linked from a new README "Operations" section. ([RAG-29](https://pickle-rick.atlassian.net/browse/RAG-29))
 
 ### Changed
-- N/A
+- README's "Known limitations" section: reworded the CPU-embedding bullet now that GPU acceleration is opt-in (RAG-24), and added bullets calling out that chunking is still fixed-size/paragraph-greedy and retrieval is still vector-only — both explicitly out of scope until the Retrieval Quality epic (RAG-21/RAG-22/RAG-23) ships. ([RAG-28](https://pickle-rick.atlassian.net/browse/RAG-28))
 
 ### Fixed
 - Removed an unused `deepeval.evaluate` import in [eval/run_eval.py](eval/run_eval.py) — the one real issue the new lint gate found. ([RAG-11](https://pickle-rick.atlassian.net/browse/RAG-11))
