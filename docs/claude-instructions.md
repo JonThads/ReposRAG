@@ -20,8 +20,8 @@ directly on `qa` or `main`.
    runs the full Postman + Playwright suite against it before it can
    merge.
 3. Once `qa` is verified stable, open a pull request from `qa` into
-   `main` for production — the Main pipeline additionally runs k6, a
-   Docker image build check, and a secrets scan.
+   `main` for production — the Main pipeline additionally runs a
+   Docker image build check and a secrets scan.
 
 The GitHub Actions pipelines below are implemented and gate every merge
 into `qa` and `main` via required status checks — merges are no longer

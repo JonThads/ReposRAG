@@ -75,6 +75,16 @@ python -m ingestion.ingest --source git --url https://github.com/you/pickle-rick
 
 Re-running for the same `--repo-name` replaces that repo's chunks (idempotent).
 
+## Managing ingested repos
+
+```bash
+# List every ingested repo, with chunk count and last-ingested timestamp
+curl http://localhost:8000/repos
+
+# Remove a repo's chunks entirely (without re-ingesting an empty replacement)
+curl -X DELETE http://localhost:8000/repos/clockwise
+```
+
 ## Querying
 
 ```bash
@@ -85,6 +95,35 @@ curl -X POST http://localhost:8000/query \
 
 Response includes the generated answer, the source chunks used (with similarity
 scores), and a timing breakdown per pipeline stage.
+
+### Streaming
+
+`POST /query/stream` takes the same request body and streams the answer as
+Server-Sent Events instead of waiting for the full generation to finish:
+
+```bash
+curl -N -X POST http://localhost:8000/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How do I install ClockWise?", "repo": "clockwise"}'
+```
+
+Emits a `token` event per generated token, then a single `done` event carrying
+`sources` and `timings_seconds` once generation completes.
+
+### Auth and rate limiting
+
+`/query`, `/query/stream`, and both `/repos` routes accept an optional
+`X-API-Key` header. Auth is **off by default** (`API_KEY` unset in `.env`) for
+local/dev use; once `API_KEY` is set, every guarded route requires a matching
+header. All guarded routes are also rate-limited per client IP
+(`RATE_LIMIT_PER_MINUTE`, default 60/minute).
+
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{"question": "How do I install ClockWise?", "repo": "clockwise"}'
+```
 
 ## Evaluation
 
@@ -121,10 +160,16 @@ similarity.
 
 ## Known limitations
 
-- Embedding runs on CPU by default — fine for a handful of small repos, slow
-  for large corpora.
+- Embedding still defaults to CPU (`EMBEDDING_DEVICE=auto` falls back to CPU
+  when no GPU is detected) — fine for a handful of small repos, slow for
+  large corpora. GPU is opt-in; see [GPU Acceleration](#gpu-acceleration-optional)
+  below.
+- Chunking is still fixed-size/paragraph-greedy (see "Chunking strategy &
+  trade-offs" above) — heading-aware or semantic chunking remains a future
+  iteration, not yet built.
 - IVFFlat index is tuned for small datasets (`lists = 100`); revisit for
   larger corpora.
+- Retrieval is vector-only — no keyword/hybrid signal or reranking yet.
 - The evaluation test set is small (hand-written) and repo-specific — good
   for iteration signal, not a statistically rigorous benchmark.
 
@@ -134,6 +179,13 @@ similarity.
   or leave it on `auto` (default) to detect automatically. Falls back to CPU if no GPU is found.
 - **Ollama**: uses the host GPU automatically if one is available and drivers are installed —
   no ReposRAG-side configuration needed. See https://ollama.com for host GPU setup.
+
+## Operations
+
+CI/CD runs on GitHub Actions (Development/QA/Main pipelines), and structured
+JSON logging with per-request correlation IDs is available for debugging.
+See [docs/runbook.md](docs/runbook.md) for pipeline details, log format, and
+GPU setup.
 
 ## Optional stretch stages (not included here)
 
