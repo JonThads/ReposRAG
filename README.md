@@ -192,3 +192,12 @@ GPU setup.
 See `ReposRAG-Implementation-Plan.md` for Stage 8 (LangChain/LangGraph
 refactor) and Stage 9 (Kubernetes deployment), which build on top of this
 codebase.
+
+## Contributing
+
+Participation in this project is governed by our
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+Licensed under the [MIT License](LICENSE).
