@@ -1,0 +1,75 @@
+name: Main
+
+# Gates merges into main: the QA suite, a Docker image build check, and a
+# secrets scan (docs/claude-instructions.md §Actions). Publishing to GHCR
+# is not automatic on every merge — it's an explicit, manual
+# workflow_dispatch that tags a release, per the same doc ("optional
+# manual workflow_dispatch tags a release"). A plain merge only proves the
+# image builds; it does not publish one.
+# [Comment] as per Jira Work Item RAG-13
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Version tag to publish to GHCR (e.g. v1.1.0). Leave blank to only build+verify, no publish.'
+        required: false
+        default: ''
+
+jobs:
+  qa:
+    uses: ./.github/workflows/qa.yml
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-build-check:
+    runs-on: ubuntu-latest
+    needs: [qa, secrets-scan]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (no push) — verifies the image still builds
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+
+  publish-release:
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    needs: [qa, secrets-scan, docker-build-check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Lowercase image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ inputs.release_tag }}
+            ${{ env.IMAGE }}:latest

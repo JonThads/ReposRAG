@@ -2,6 +2,20 @@
 
 All notable changes to ReposRAG are documented here, newest first.
 
+## 2026-08-25
+
+### Added
+- Development pipeline (`.github/workflows/development.yml`) — lint (`ruff`), a compile check, and a Docker build + boot check, firing on every push to a prefixed local-development branch. ([RAG-11](https://pickle-rick.atlassian.net/browse/RAG-11))
+- QA pipeline (`.github/workflows/qa.yml`) — the `pytest` suite, then a live end-to-end smoke test (self-ingest this repo's own docs as a fixture, then a real `/query` call) against the docker-compose stack, gating merges into `qa`. ([RAG-12](https://pickle-rick.atlassian.net/browse/RAG-12))
+- Main pipeline (`.github/workflows/main.yml`) — the QA pipeline, a Docker image build check, and a secrets scan (`gitleaks`), gating merges into `main`; an optional manual `workflow_dispatch` additionally tags and publishes a release image to GHCR. ([RAG-13](https://pickle-rick.atlassian.net/browse/RAG-13))
+- `ruff.toml` scoping the Development pipeline's lint check to pyflakes (`F`) rules — this is the first time lint has gated merges on this codebase, and it wasn't written to a strict line-length or pyupgrade style, so starting with real-correctness rules avoids failing on unrelated pre-existing code. ([RAG-11](https://pickle-rick.atlassian.net/browse/RAG-11))
+
+### Changed
+- N/A
+
+### Fixed
+- Removed an unused `deepeval.evaluate` import in [eval/run_eval.py](eval/run_eval.py) — the one real issue the new lint gate found. ([RAG-11](https://pickle-rick.atlassian.net/browse/RAG-11))
+
 ## 2026-08-24
 
 ### Added
