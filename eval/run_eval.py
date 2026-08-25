@@ -16,7 +16,6 @@ import sys
 from pathlib import Path
 
 import httpx
-from deepeval import evaluate
 from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric
 from deepeval.models.base_model import DeepEvalBaseLLM
 from deepeval.test_case import LLMTestCase
