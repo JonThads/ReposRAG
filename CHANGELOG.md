@@ -5,6 +5,7 @@ All notable changes to ReposRAG are documented here, newest first.
 ## 2026-08-25
 
 ### Added
+- `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1) and `LICENSE` (MIT), with a new README "Contributing" and "License" section linking to each.
 - Development pipeline (`.github/workflows/development.yml`) — lint (`ruff`), a compile check, and a Docker build + boot check, firing on every push to a prefixed local-development branch. ([RAG-11](https://pickle-rick.atlassian.net/browse/RAG-11))
 - QA pipeline (`.github/workflows/qa.yml`) — the `pytest` suite, then a live end-to-end smoke test (self-ingest this repo's own docs as a fixture, then a real `/query` call) against the docker-compose stack, gating merges into `qa`. ([RAG-12](https://pickle-rick.atlassian.net/browse/RAG-12))
 - Main pipeline (`.github/workflows/main.yml`) — the QA pipeline, a Docker image build check, and a secrets scan (`gitleaks`), gating merges into `main`; an optional manual `workflow_dispatch` additionally tags and publishes a release image to GHCR. ([RAG-13](https://pickle-rick.atlassian.net/browse/RAG-13))
