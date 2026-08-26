@@ -6,3 +6,6 @@ venv/
 eval/eval_report.csv
 .pytest_cache
 *.egg-info/
+
+# Superpowers planning artifacts (working docs, not shipped content)
+docs/superpowers/
