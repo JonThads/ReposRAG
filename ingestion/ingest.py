@@ -9,6 +9,7 @@ Re-running for the same --repo-name replaces its existing chunks (idempotent).
 """
 
 import argparse
+import hashlib
 import logging
 import shutil
 import sys
@@ -18,21 +19,41 @@ from typing import List
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from api.chunker import chunk_markdown  # noqa: E402
+from api.chunker import chunk_code, chunk_markdown  # noqa: E402
 from api.db import get_conn  # noqa: E402
 from api.embeddings import embed_batch  # noqa: E402
 from api.logging_config import configure_logging  # noqa: E402
 
-TARGET_GLOBS = ["README.md", "readme.md", "docs/**/*.md", "CONTRIBUTING.md"]
+DOC_GLOBS = ["README.md", "readme.md", "docs/**/*.md", "CONTRIBUTING.md"]
+# Added for additional doc formats + source files as per Jira Ticket
+# RAG-18. Both are opt-in via --include-code, since both are noisier and
+# costlier to embed than the curated doc set above.
+EXTRA_DOC_GLOBS = ["**/*.rst", "**/*.txt"]
+CODE_GLOBS = ["**/*.py", "**/*.js", "**/*.ts", "**/*.go"]
+EXCLUDED_DIR_NAMES = {
+    ".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build",
+    ".pytest_cache", ".ruff_cache", ".mypy_cache",
+}
 
 logger = logging.getLogger("reposrag.ingest")
 
 
-def find_doc_files(root: Path) -> List[Path]:
+def _iter_files(root: Path, globs: List[str]) -> List[Path]:
     found = set()
-    for pattern in TARGET_GLOBS:
-        found.update(root.glob(pattern))
+    for pattern in globs:
+        for path in root.glob(pattern):
+            if path.is_file() and not any(part in EXCLUDED_DIR_NAMES for part in path.relative_to(root).parts):
+                found.add(path)
     return sorted(found)
+
+
+def find_doc_files(root: Path, include_code: bool = False) -> List[Path]:
+    globs = list(DOC_GLOBS) + (EXTRA_DOC_GLOBS if include_code else [])
+    return _iter_files(root, globs)
+
+
+def find_code_files(root: Path) -> List[Path]:
+    return _iter_files(root, CODE_GLOBS)
 
 
 def clone_repo(url: str) -> Path:
@@ -44,11 +65,36 @@ def clone_repo(url: str) -> Path:
     return tmp_dir
 
 
-def delete_existing_chunks(repo_name: str):
+def _content_hash(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _load_known_hashes(repo_name: str) -> dict:
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM chunks WHERE repo = %s;", (repo_name,))
-    logger.info("ingest.cleared_existing_chunks", extra={"repo": repo_name})
+            cur.execute("SELECT file_path, content_hash FROM ingested_files WHERE repo = %s;", (repo_name,))
+            return dict(cur.fetchall())
+
+
+def _delete_file_chunks(repo_name: str, file_path: str):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chunks WHERE repo = %s AND file_path = %s;", (repo_name, file_path))
+            cur.execute("DELETE FROM ingested_files WHERE repo = %s AND file_path = %s;", (repo_name, file_path))
+
+
+def _record_file_hash(repo_name: str, file_path: str, content_hash: str):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO ingested_files (repo, file_path, content_hash, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (repo, file_path)
+                DO UPDATE SET content_hash = EXCLUDED.content_hash, updated_at = NOW();
+                """,
+                (repo_name, file_path, content_hash),
+            )
 
 
 def insert_chunks(repo_name: str, file_path: str, chunks, embeddings):
@@ -78,28 +124,67 @@ def insert_chunks(repo_name: str, file_path: str, chunks, embeddings):
                 )
 
 
-def ingest_repo(root: Path, repo_name: str):
-    doc_files = find_doc_files(root)
+def _chunk_file(doc_file: Path, text: str):
+    ext = doc_file.suffix.lower()
+    if ext in (".py", ".js", ".ts", ".go"):
+        return chunk_code(text, ext)
+    return chunk_markdown(text)
+
+
+def ingest_repo(root: Path, repo_name: str, include_code: bool = False):
+    """
+    Ingest (or re-ingest) a repo's docs — and, with include_code, its source
+    files — incrementally (RAG-19): a file whose content hash matches the
+    last ingested run is skipped entirely (no re-chunk/re-embed); a changed
+    file has its old chunks replaced; a file that disappeared since the
+    last run has its chunks removed.
+    """
+    doc_files = find_doc_files(root, include_code=include_code)
+    if include_code:
+        doc_files += find_code_files(root)
     if not doc_files:
-        logger.warning("ingest.no_doc_files", extra={"root": str(root), "globs": TARGET_GLOBS})
+        logger.warning("ingest.no_doc_files", extra={"root": str(root), "include_code": include_code})
         return
 
-    delete_existing_chunks(repo_name)
-
+    known_hashes = _load_known_hashes(repo_name)
+    seen_paths = set()
     total_chunks = 0
+    skipped = 0
+
     for doc_file in doc_files:
         rel_path = str(doc_file.relative_to(root))
-        text = doc_file.read_text(encoding="utf-8", errors="ignore")
-        chunks = chunk_markdown(text)
-        if not chunks:
+        seen_paths.add(rel_path)
+        raw = doc_file.read_bytes()
+        content_hash = _content_hash(raw)
+
+        if known_hashes.get(rel_path) == content_hash:
+            skipped += 1
             continue
 
-        logger.info("ingest.file_chunked", extra={"file": rel_path, "chunk_count": len(chunks)})
-        embeddings = embed_batch([c.content for c in chunks])
-        insert_chunks(repo_name, rel_path, chunks, embeddings)
-        total_chunks += len(chunks)
+        text = raw.decode("utf-8", errors="ignore")
+        chunks = _chunk_file(doc_file, text)
 
-    logger.info("ingest.complete", extra={"repo": repo_name, "total_chunks": total_chunks})
+        _delete_file_chunks(repo_name, rel_path)
+        if chunks:
+            logger.info("ingest.file_chunked", extra={"file": rel_path, "chunk_count": len(chunks)})
+            embeddings = embed_batch([c.content for c in chunks])
+            insert_chunks(repo_name, rel_path, chunks, embeddings)
+            total_chunks += len(chunks)
+        _record_file_hash(repo_name, rel_path, content_hash)
+
+    removed_paths = set(known_hashes) - seen_paths
+    for rel_path in removed_paths:
+        _delete_file_chunks(repo_name, rel_path)
+
+    logger.info(
+        "ingest.complete",
+        extra={
+            "repo": repo_name,
+            "total_chunks": total_chunks,
+            "files_skipped_unchanged": skipped,
+            "files_removed": len(removed_paths),
+        },
+    )
 
 
 def main():
@@ -109,6 +194,11 @@ def main():
     parser.add_argument("--path", help="Local path to the repo (required if --source local)")
     parser.add_argument("--url", help="Git URL to clone (required if --source git)")
     parser.add_argument("--repo-name", required=True, help="Logical name to store chunks under")
+    parser.add_argument(
+        "--include-code",
+        action="store_true",
+        help="Also ingest source files (.py/.js/.ts/.go) and extra doc formats (.rst/.txt).",
+    )
     args = parser.parse_args()
 
     cleanup_dir = None
@@ -123,7 +213,7 @@ def main():
             root = clone_repo(args.url)
             cleanup_dir = root
 
-        ingest_repo(root, args.repo_name)
+        ingest_repo(root, args.repo_name, include_code=args.include_code)
     finally:
         if cleanup_dir and cleanup_dir.exists():
             shutil.rmtree(cleanup_dir, ignore_errors=True)
