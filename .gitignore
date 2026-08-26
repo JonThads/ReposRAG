@@ -9,3 +9,6 @@ eval/eval_report.csv
 
 # Superpowers planning artifacts (working docs, not shipped content)
 docs/superpowers/
+
+# Claude Code harness runtime lock (per-session PID/lock state, not project content)
+.claude/scheduled_tasks.lock
