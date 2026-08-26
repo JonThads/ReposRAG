@@ -2,6 +2,11 @@
 
 All notable changes to ReposRAG are documented here, newest first.
 
+## 2026-08-26
+
+### Added
+- `--include-code` ingestion flag: source files (`.py`/`.js`/`.ts`/`.go`) and extra doc formats (`.rst`/`.txt`) can now be ingested alongside the existing curated doc set, opt-in per run. Code is chunked function/class-aware (Python via `ast`, JS/TS/Go via a regex heuristic) so each chunk's `heading_context` names the definition it came from, instead of an arbitrary token window. Falls back to a single unlabeled chunk for unparseable Python or unsupported languages. ([RAG-18](https://pickle-rick.atlassian.net/browse/RAG-18))
+
 ## 2026-08-25
 
 ### Added
