@@ -21,3 +21,14 @@ CREATE INDEX IF NOT EXISTS chunks_embedding_idx
     WITH (lists = 100);
 
 CREATE INDEX IF NOT EXISTS chunks_repo_idx ON chunks (repo);
+
+-- Tracks the content hash of each ingested source file so re-ingestion can
+-- skip unchanged files and detect deletions. Added for incremental
+-- ingestion as per Jira Ticket RAG-19.
+CREATE TABLE IF NOT EXISTS ingested_files (
+    repo            TEXT NOT NULL,
+    file_path       TEXT NOT NULL,
+    content_hash    TEXT NOT NULL,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (repo, file_path)
+);
