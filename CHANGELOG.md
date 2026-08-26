@@ -6,6 +6,7 @@ All notable changes to ReposRAG are documented here, newest first.
 
 ### Added
 - `--include-code` ingestion flag: source files (`.py`/`.js`/`.ts`/`.go`) and extra doc formats (`.rst`/`.txt`) can now be ingested alongside the existing curated doc set, opt-in per run. Code is chunked function/class-aware (Python via `ast`, JS/TS/Go via a regex heuristic) so each chunk's `heading_context` names the definition it came from, instead of an arbitrary token window. Falls back to a single unlabeled chunk for unparseable Python or unsupported languages. ([RAG-18](https://pickle-rick.atlassian.net/browse/RAG-18))
+- Incremental ingestion: re-running ingestion now diffs each file's SHA-256 content hash against the last run (`ingested_files` table) — unchanged files are skipped entirely (no re-embed), only changed files are re-chunked, and files removed from the source repo have their chunks deleted. Replaces the previous whole-repo delete-and-reinsert on every run. ([RAG-19](https://pickle-rick.atlassian.net/browse/RAG-19))
 
 ## 2026-08-25
 
