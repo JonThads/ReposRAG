@@ -18,21 +18,41 @@ from typing import List
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from api.chunker import chunk_markdown  # noqa: E402
+from api.chunker import chunk_code, chunk_markdown  # noqa: E402
 from api.db import get_conn  # noqa: E402
 from api.embeddings import embed_batch  # noqa: E402
 from api.logging_config import configure_logging  # noqa: E402
 
-TARGET_GLOBS = ["README.md", "readme.md", "docs/**/*.md", "CONTRIBUTING.md"]
+DOC_GLOBS = ["README.md", "readme.md", "docs/**/*.md", "CONTRIBUTING.md"]
+# Added for additional doc formats + source files as per Jira Ticket
+# RAG-18. Both are opt-in via --include-code, since both are noisier and
+# costlier to embed than the curated doc set above.
+EXTRA_DOC_GLOBS = ["**/*.rst", "**/*.txt"]
+CODE_GLOBS = ["**/*.py", "**/*.js", "**/*.ts", "**/*.go"]
+EXCLUDED_DIR_NAMES = {
+    ".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build",
+    ".pytest_cache", ".ruff_cache", ".mypy_cache",
+}
 
 logger = logging.getLogger("reposrag.ingest")
 
 
-def find_doc_files(root: Path) -> List[Path]:
+def _iter_files(root: Path, globs: List[str]) -> List[Path]:
     found = set()
-    for pattern in TARGET_GLOBS:
-        found.update(root.glob(pattern))
+    for pattern in globs:
+        for path in root.glob(pattern):
+            if path.is_file() and not any(part in EXCLUDED_DIR_NAMES for part in path.relative_to(root).parts):
+                found.add(path)
     return sorted(found)
+
+
+def find_doc_files(root: Path, include_code: bool = False) -> List[Path]:
+    globs = list(DOC_GLOBS) + (EXTRA_DOC_GLOBS if include_code else [])
+    return _iter_files(root, globs)
+
+
+def find_code_files(root: Path) -> List[Path]:
+    return _iter_files(root, CODE_GLOBS)
 
 
 def clone_repo(url: str) -> Path:
@@ -78,10 +98,19 @@ def insert_chunks(repo_name: str, file_path: str, chunks, embeddings):
                 )
 
 
-def ingest_repo(root: Path, repo_name: str):
-    doc_files = find_doc_files(root)
+def _chunk_file(doc_file: Path, text: str):
+    ext = doc_file.suffix.lower()
+    if ext in (".py", ".js", ".ts", ".go"):
+        return chunk_code(text, ext)
+    return chunk_markdown(text)
+
+
+def ingest_repo(root: Path, repo_name: str, include_code: bool = False):
+    doc_files = find_doc_files(root, include_code=include_code)
+    if include_code:
+        doc_files += find_code_files(root)
     if not doc_files:
-        logger.warning("ingest.no_doc_files", extra={"root": str(root), "globs": TARGET_GLOBS})
+        logger.warning("ingest.no_doc_files", extra={"root": str(root), "include_code": include_code})
         return
 
     delete_existing_chunks(repo_name)
@@ -90,7 +119,7 @@ def ingest_repo(root: Path, repo_name: str):
     for doc_file in doc_files:
         rel_path = str(doc_file.relative_to(root))
         text = doc_file.read_text(encoding="utf-8", errors="ignore")
-        chunks = chunk_markdown(text)
+        chunks = _chunk_file(doc_file, text)
         if not chunks:
             continue
 
@@ -109,6 +138,11 @@ def main():
     parser.add_argument("--path", help="Local path to the repo (required if --source local)")
     parser.add_argument("--url", help="Git URL to clone (required if --source git)")
     parser.add_argument("--repo-name", required=True, help="Logical name to store chunks under")
+    parser.add_argument(
+        "--include-code",
+        action="store_true",
+        help="Also ingest source files (.py/.js/.ts/.go) and extra doc formats (.rst/.txt).",
+    )
     args = parser.parse_args()
 
     cleanup_dir = None
@@ -123,7 +157,7 @@ def main():
             root = clone_repo(args.url)
             cleanup_dir = root
 
-        ingest_repo(root, args.repo_name)
+        ingest_repo(root, args.repo_name, include_code=args.include_code)
     finally:
         if cleanup_dir and cleanup_dir.exists():
             shutil.rmtree(cleanup_dir, ignore_errors=True)
