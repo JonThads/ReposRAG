@@ -99,6 +99,14 @@ with the full type list, matching the branch prefixes above: `feature`,
 
 Instead, use the standards established in [Conventional Commits](https://www.conventionalcommits.org/).
 
+Also use the Jira Work Item keys for the git commit messages (For example, git commit -m "JRA-123) to reference work items in development spaces. When you create a pull request, use the key in the pull request title.
+
+Jira Reference: [support.atlassian.com/jira-software-cloud/docs/reference-issues-in-your-development-work](https://support.atlassian.com/jira-software-cloud/docs/reference-issues-in-your-development-work/)
+
+For Pull Requests:
+
+Check out a new branch in your repo, using the work item key in the branch name. For example, git checkout -b JRA-123-<branch-name></branch>.When you create a pull request, use the work item key in the pull request title.
+
 ### Conventional Comments
 
 Use the standards established in [conventionalcomments.org](https://conventionalcomments.org/)
